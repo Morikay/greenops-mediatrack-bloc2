@@ -6,6 +6,10 @@
   vars:
     web_root: /var/www/html
     ops_user: meditrackops
+    tls_dir: /etc/nginx/ssl
+    tls_key_path: "{{ tls_dir }}/meditrack-selfsigned.key"
+    tls_cert_path: "{{ tls_dir }}/meditrack-selfsigned.crt"
+    server_name: "{{ ansible_host | default(inventory_hostname) }}"
 
   tasks:
     - name: Mettre a jour le cache APT
@@ -18,6 +22,7 @@
       ansible.builtin.apt:
         name:
           - nginx
+          - openssl
           - ufw
         state: present
 
@@ -31,34 +36,70 @@
         create_home: true
         password_lock: true
 
-    # Supprime la page par defaut de Nginx.
+    - name: Creer le repertoire TLS de Nginx
+      ansible.builtin.file:
+        path: "{{ tls_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Generer une cle privee autosignee si absente
+      ansible.builtin.command:
+        cmd: openssl genrsa -out {{ tls_key_path }} 2048
+        creates: "{{ tls_key_path }}"
+
+    - name: Generer un certificat autosigne si absent
+      ansible.builtin.command:
+        cmd: >-
+          openssl req -x509 -new -nodes -key {{ tls_key_path }}
+          -sha256 -days 365
+          -out {{ tls_cert_path }}
+          -subj /CN={{ server_name }}
+        creates: "{{ tls_cert_path }}"
+
     - name: Supprimer la page Nginx par defaut
       ansible.builtin.file:
         path: "{{ web_root }}/index.nginx-debian.html"
         state: absent
 
-    # Copie les fichiers du site avec des droits en lecture seule pour le groupe.
-    - name: Copier la page d'accueil
+    - name: Copier tout le site statique sur l'instance
       ansible.builtin.copy:
-        src: ../site/index.html
-        dest: "{{ web_root }}/index.html"
+        src: ../site/
+        dest: "{{ web_root }}/"
+        owner: root
+        group: root
+        mode: preserve
+        directory_mode: "0755"
+
+    - name: Installer la configuration Nginx MediTrack
+      ansible.builtin.template:
+        src: templates/meditrack-nginx.conf.j2
+        dest: /etc/nginx/sites-available/meditrack.conf
         owner: root
         group: root
         mode: "0644"
 
-    - name: Copier la page contact
-      ansible.builtin.copy:
-        src: ../site/contact.html
-        dest: "{{ web_root }}/contact.html"
-        owner: root
-        group: root
-        mode: "0644"
+    - name: Activer le site MediTrack
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/meditrack.conf
+        dest: /etc/nginx/sites-enabled/meditrack.conf
+        state: link
 
-    # Demarre Nginx.
+    - name: Desactiver le site Nginx par defaut
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Verifier la configuration Nginx
+      ansible.builtin.command:
+        cmd: nginx -t
+      changed_when: false
+
     - name: Activer Nginx
       ansible.builtin.service:
         name: nginx
-        state: started
+        state: restarted
         enabled: true
 
     # Autorise SSH pour l'administration.
@@ -72,6 +113,11 @@
       community.general.ufw:
         rule: allow
         name: "Nginx HTTP"
+
+    - name: Autoriser HTTPS
+      community.general.ufw:
+        rule: allow
+        name: "Nginx Full"
 
     # Refuse tout le reste par defaut.
     - name: Definir la politique entrante par defaut
@@ -90,7 +136,14 @@
         state: enabled
 
     # Verifie que Nginx repond localement.
-    - name: Verifier Nginx
+    - name: Verifier la redirection HTTP vers HTTPS
       ansible.builtin.uri:
         url: http://127.0.0.1
+        follow_redirects: none
+        status_code: 301
+
+    - name: Verifier Nginx en HTTPS local
+      ansible.builtin.uri:
+        url: https://127.0.0.1
+        validate_certs: false
         status_code: 200

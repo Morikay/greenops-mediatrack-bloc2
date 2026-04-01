@@ -93,7 +93,7 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# Ouvre SSH depuis votre IP et HTTP pour le serveur web de demonstration.
+# Ouvre SSH depuis votre IP et HTTP/HTTPS pour le serveur web de demonstration.
 resource "aws_security_group" "web" {
   name        = "${var.project_name}-web-sg"
   description = "SSH limite et HTTP public pour Nginx"
@@ -113,6 +113,14 @@ resource "aws_security_group" "web" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTP pour le serveur web de demonstration"
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "HTTPS pour le serveur web de demonstration"
   }
 
   egress {
