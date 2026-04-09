@@ -290,6 +290,16 @@ resource "aws_cloudfront_distribution" "site" {
   price_class         = var.cloudfront_price_class
   wait_for_deployment = true
 
+  lifecycle {
+    # Le provider AWS remonte un drift persistant sur l'origine S3 et le
+    # protocole minimum du certificat CloudFront par defaut, alors que la
+    # distribution fonctionne deja correctement.
+    ignore_changes = [
+      origin,
+      viewer_certificate[0].minimum_protocol_version,
+    ]
+  }
+
   origin {
     domain_name              = aws_s3_bucket.site.bucket_regional_domain_name
     origin_id                = "s3-origin"

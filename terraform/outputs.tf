@@ -28,3 +28,28 @@ output "cloudfront_url" {
 output "cloudfront_domain_name" {
   value = aws_cloudfront_distribution.site.domain_name
 }
+
+# URL du depot ECR de l'API.
+output "ecr_repository_url" {
+  value = aws_ecr_repository.api.repository_url
+}
+
+# Endpoint RDS prive.
+output "rds_endpoint" {
+  value = aws_db_instance.api.address
+}
+
+# DNS public de l'ALB exposant l'API.
+output "api_alb_dns_name" {
+  value = aws_lb.api.dns_name
+}
+
+# Nom du cluster ECS.
+output "ecs_cluster_name" {
+  value = aws_ecs_cluster.api.name
+}
+
+# Nom du service ECS.
+output "ecs_service_name" {
+  value = aws_ecs_service.api.name
+}

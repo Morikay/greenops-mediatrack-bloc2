@@ -1,125 +1,215 @@
-# GreenOps MediTrack
+# GreenOps MediTrack - Bloc 2
 
-Projet de formation DevOps pour automatiser le deploiement d'une infrastructure AWS simple avec Terraform et Ansible.
+Projet de formation DevOps pour automatiser le deploiement d'une application backend conteneurisee sur AWS, en reutilisant le socle de l'etude de cas 1.
 
-## Architecture retenue
+## Objectif
 
-- `S3 + CloudFront` : publication publique du site statique en HTTPS.
-- `EC2 + Nginx + Ansible` : demonstration de configuration serveur et de securisation systeme.
-- `VPC + sous-reseau public` : socle reseau minimal pour l'instance EC2.
+Ce projet repond a une etude de cas orientee conteneurisation et mise en production cloud avec les objectifs suivants :
 
-Le site public de reference est l'URL CloudFront. L'instance EC2 ne remplace pas CloudFront ; elle sert a demontrer l'automatisation systeme imposee par l'etude de cas.
+- construire une image Docker pour une API Node.js ;
+- publier cette image dans un depot ECR prive ;
+- deployer une base PostgreSQL sur RDS ;
+- deployer l'API sur ECS Fargate ;
+- exposer l'API via un Application Load Balancer public ;
+- appliquer un cloisonnement reseau simple et coherent.
 
-## Arborescence
+## Logique generale
+
+Le Bloc 2 part du socle Terraform du Bloc 1 et l'etend pour ajouter une plateforme API :
+
+- le VPC existant est reutilise ;
+- de nouveaux sous-reseaux prives sont ajoutes pour ECS et RDS ;
+- un NAT Gateway permet aux taches Fargate en sous-reseau prive de recuperer l'image Docker et d'ecrire les logs ;
+- l'API est construite localement depuis `api-backend/` ;
+- l'image est poussee dans ECR ;
+- ECS Fargate consomme cette image et dialogue avec PostgreSQL ;
+- l'ALB fournit le point d'entree HTTP public vers l'API.
+
+## Architecture cible
+
+- `VPC existant` : socle reseau repris du Bloc 1.
+- `2 sous-reseaux publics` : instance EC2 existante et ALB public.
+- `2 sous-reseaux prives` : taches ECS et base RDS.
+- `ECR` : stockage prive de l'image Docker.
+- `RDS PostgreSQL db.t3.micro` : base de donnees relationnelle privee.
+- `ECS Fargate` : execution de l'API sans gerer de serveur applicatif.
+- `ALB` : publication HTTP de l'API.
+- `Secrets Manager` : stockage du mot de passe base de donnees.
+- `CloudWatch Logs` : collecte des logs du conteneur.
+
+## Etat actuel du projet
+
+Le Bloc 2 est maintenant deploye et verifie sur AWS. Les ressources principales creees et validees sont :
+
+- depot ECR : `691317218548.dkr.ecr.eu-west-3.amazonaws.com/greenops-mediatrack-api`
+- base RDS PostgreSQL : `greenops-mediatrack-postgres.cr6s406e2tq2.eu-west-3.rds.amazonaws.com`
+- cluster ECS : `greenops-mediatrack-cluster`
+- service ECS : `greenops-mediatrack-api-service`
+- ALB public : `http://greenops-mediatrack-alb-850454209.eu-west-3.elb.amazonaws.com`
+
+Les tests fonctionnels reussis sont :
+
+- `GET /` -> `200 OK`
+- `GET /contacts` -> `200 OK`
+- `POST /contact` -> `201 Created`
+
+Le service ECS est actif, la target ALB est `healthy`, la table `contacts` est bien creee dans PostgreSQL et un `terraform plan` final ne remonte plus aucun changement.
+
+Le socle Bloc 1 de reference reste deploye avec :
+
+- URL CloudFront : `https://difzkce0aqf6s.cloudfront.net`
+- EC2 DNS public : `ec2-35-180-79-188.eu-west-3.compute.amazonaws.com`
+- Bucket S3 : `greenops-mediatrack-af18a78a`
+
+## Arborescence reelle
 
 ```text
 .
 ├── ansible/
 │   ├── ansible.cfg
-│   ├── generate_inventory.sh
 │   ├── inventory.ini
-│   └── playbook.yml
-├── docs/
-│   ├── architecture.md
-│   ├── evidence-checklist.md
-│   ├── report-template.md
-│   └── iam/
-│       └── terraform-deployer-policy.json
+│   ├── playbook.yml
+│   └── templates/
+│       └── meditrack-nginx.conf.j2
+├── api-backend/
+│   ├── Dockerfile
+│   ├── index.js
+│   └── package.json
 ├── site/
+│   ├── assets/
 │   ├── contact.html
 │   └── index.html
 └── terraform/
+    ├── api_platform.tf
     ├── main.tf
     ├── outputs.tf
     ├── provider.tf
-    ├── terraform.tfvars.example
     ├── variables.tf
     └── version.tf
 ```
 
+## Role des dossiers
+
+- `terraform/` : creation de l'infrastructure AWS du Bloc 1 et des extensions Bloc 2.
+- `api-backend/` : code source de l'API Node.js et Dockerfile.
+- `ansible/` : configuration de l'instance EC2 du Bloc 1.
+- `site/` : site statique du Bloc 1.
+
+## Fichiers Terraform Bloc 2
+
+- [main.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/main.tf) : socle d'infrastructure du Bloc 1.
+- [api_platform.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/api_platform.tf) : ressources specifiques au Bloc 2, notamment ECR, RDS, ECS, ALB, NAT et sous-reseaux prives.
+- [variables.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/variables.tf) : variables communes et variables du Bloc 2.
+- [provider.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/provider.tf) : provider AWS, region et profil local.
+- [outputs.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/outputs.tf) : valeurs utiles apres deploiement, comme l'URL ECR, l'endpoint RDS et le DNS de l'ALB.
+- [version.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/version.tf) : version minimale de Terraform et des providers.
+
+## Fichiers API
+
+- [package.json](/home/llesage/greenops-mediatrack-bloc2/api-backend/package.json) : dependances Node.js de l'API.
+- [index.js](/home/llesage/greenops-mediatrack-bloc2/api-backend/index.js) : logique de l'API Express et acces PostgreSQL.
+- [Dockerfile](/home/llesage/greenops-mediatrack-bloc2/api-backend/Dockerfile) : construction de l'image conteneur.
+
 ## Prerequis
 
-- Terraform 1.5+
-- Ansible
+- Terraform 1.5 ou plus
 - AWS CLI
-- Un profil AWS local avec les droits IAM adaptes
+- Docker
+- un profil AWS CLI local fonctionnel
+- les droits IAM necessaires pour ECR, ECS, ELBv2, RDS, IAM, Secrets Manager, CloudWatch Logs, EC2 et VPC
 
-## Configuration locale
+## Authentification AWS
 
-1. Copier l'exemple de variables :
+Terraform utilise le provider AWS declare dans [provider.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/provider.tf) avec :
 
-```bash
-cd /home/llesage/greenops-mediatrack/terraform
-cp terraform.tfvars.example terraform.tfvars
-```
+- la region `eu-west-3`
+- le profil local `greenops`
+- les fichiers AWS locaux :
+  - `/home/llesage/.aws/config`
+  - `/home/llesage/.aws/credentials`
 
-2. Adapter au minimum :
+Le profil local `greenops` pointe vers l'utilisateur IAM AWS `greenops-mediatrack-deployer`.
 
-- `aws_profile`
-- `allowed_ssh_cidr`
+## Sequence de deploiement recommandee
 
-## Deploiement
+### 1. Verifier Terraform
 
-### 1. Provisionner avec Terraform
-
-Contexte : machine locale, dossier [terraform/main.tf](/home/llesage/greenops-mediatrack/terraform/main.tf)
-
-```bash
-cd /home/llesage/greenops-mediatrack/terraform
-terraform init
-terraform fmt
-terraform validate
-terraform plan
-terraform apply
-```
-
-### 2. Generer l'inventaire Ansible
-
-Contexte : machine locale, dossier [ansible/generate_inventory.sh](/home/llesage/greenops-mediatrack/ansible/generate_inventory.sh)
+Contexte : machine locale, dossier `/home/llesage/greenops-mediatrack-bloc2/terraform`
 
 ```bash
-cd /home/llesage/greenops-mediatrack/ansible
-bash generate_inventory.sh
+cd /home/llesage/greenops-mediatrack-bloc2/terraform
+HOME=/home/llesage terraform init
+HOME=/home/llesage terraform validate
+HOME=/home/llesage terraform plan
 ```
 
-### 3. Configurer l'instance EC2 avec Ansible
-
-Contexte : machine locale, dossier [ansible/playbook.yml](/home/llesage/greenops-mediatrack/ansible/playbook.yml)
+### 2. Creer le depot ECR
 
 ```bash
-cd /home/llesage/greenops-mediatrack/ansible
-ansible-galaxy collection install community.general
-ansible-playbook playbook.yml
+cd /home/llesage/greenops-mediatrack-bloc2/terraform
+HOME=/home/llesage terraform apply -target=aws_ecr_repository.api
 ```
 
-## Verification
+### 3. Construire et pousser l'image Docker
+
+Exemple de sequence :
 
 ```bash
-cd /home/llesage/greenops-mediatrack/terraform
-terraform output cloudfront_url
-terraform output ec2_public_dns
+aws ecr get-login-password --profile greenops --region eu-west-3 | docker login --username AWS --password-stdin <ecr_repository_url>
+cd /home/llesage/greenops-mediatrack-bloc2/api-backend
+docker build -t meditrack-api:v2 .
+docker tag meditrack-api:v2 <ecr_repository_url>:v2
+docker push <ecr_repository_url>:v2
 ```
 
-Ouvrir ensuite l'URL CloudFront dans un navigateur. Le site doit etre accessible en HTTPS. Une requete HTTP doit etre redirigee vers HTTPS par CloudFront.
+### 4. Deployer l'infrastructure complete
+
+```bash
+cd /home/llesage/greenops-mediatrack-bloc2/terraform
+HOME=/home/llesage terraform apply
+```
+
+### 5. Verifier l'API
+
+Une fois l'ALB et ECS actifs, tester :
+
+- `GET /`
+- `GET /contacts`
+- `POST /contact`
+
+Exemple de tests reussis :
+
+```bash
+curl http://greenops-mediatrack-alb-850454209.eu-west-3.elb.amazonaws.com/
+curl http://greenops-mediatrack-alb-850454209.eu-west-3.elb.amazonaws.com/contacts
+curl -X POST http://greenops-mediatrack-alb-850454209.eu-west-3.elb.amazonaws.com/contact \
+  -H 'Content-Type: application/json' \
+  -d '{"nom":"Test User","email":"test@example.com","message":"Bonjour depuis ECS"}'
+```
 
 ## Securite mise en oeuvre
 
-- utilisateur IAM dedie au deploiement
-- utilisateur IAM retenu pour ce projet : `greenops-mediatrack-deployer`
-- principe du moindre privilege documente dans `docs/iam/`
-- bucket S3 prive, accessible uniquement via CloudFront
-- TLS force sur CloudFront
-- EBS chiffre sur l'EC2
-- IMDSv2 obligatoire sur l'EC2
-- SSH limite a une IP source en `/32`
-- UFW active sur le serveur
+- ALB public uniquement sur le port `80`
+- ECS accessible uniquement depuis le security group de l'ALB sur le port `3000`
+- RDS accessible uniquement depuis le security group ECS sur le port `5432`
+- RDS non public
+- secrets de base de donnees stockes dans Secrets Manager
+- logs conteneur dans CloudWatch
+- chiffrement S3 et EBS deja herites du Bloc 1
 
-## Fichiers a ne jamais publier
+## Point de vigilance important
 
-Le depot ignore :
+Ce dossier Bloc 2 est separe du Bloc 1 sur le plan du code, mais il reutilise le socle d'infrastructure Terraform issu du Bloc 1. Un `terraform apply` Bloc 2 ajoute donc des ressources autour de ce socle et peut mettre a jour certains elements communs si les variables diffèrent.
 
-- les cles privees `.pem`
-- les fichiers `terraform.tfstate`
-- les fichiers `terraform.tfvars`
+Un drift residuel CloudFront existait au depart sur le socle Bloc 1. Il a ete neutralise dans [main.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/main.tf) pour retrouver un `terraform plan` final propre.
 
-Si ces fichiers ont deja ete pousses sur un depot distant, il faut les retirer de l'historique et regenerer les secrets concernes.
+## Fichiers sensibles
+
+Ces fichiers ne doivent pas etre publies dans un depot public :
+
+- `terraform/terraform.tfstate`
+- `terraform/terraform.tfstate.backup`
+- `terraform/greenops-mediatrack-ec2.pem`
+- tout fichier `terraform.tfvars` local
+
+Si une cle ou un secret a deja ete expose, il faut le regenerer.

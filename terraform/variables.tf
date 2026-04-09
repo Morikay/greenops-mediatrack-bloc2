@@ -28,6 +28,23 @@ variable "public_subnet_cidr" {
   default = "10.0.1.0/24"
 }
 
+# Second sous-reseau public pour l'ALB.
+variable "public_subnet_b_cidr" {
+  type    = string
+  default = "10.0.2.0/24"
+}
+
+# Sous-reseaux prives pour ECS et RDS.
+variable "private_subnet_a_cidr" {
+  type    = string
+  default = "10.0.10.0/24"
+}
+
+variable "private_subnet_b_cidr" {
+  type    = string
+  default = "10.0.11.0/24"
+}
+
 # Type d'instance EC2.
 variable "instance_type" {
   type    = string
@@ -48,6 +65,30 @@ variable "cloudfront_price_class" {
 
 # Adresse autorisee a se connecter en SSH.
 variable "allowed_ssh_cidr" {
-  type = string
+  type    = string
   default = "235.235.235.235/32"
+}
+
+# Tag de l'image Docker poussee vers ECR.
+variable "api_image_tag" {
+  type    = string
+  default = "v1"
+}
+
+# Nombre de taches ECS desirees.
+variable "ecs_desired_count" {
+  type    = number
+  default = 1
+}
+
+# Nom de la base PostgreSQL.
+variable "db_name" {
+  type    = string
+  default = "meditrack"
+}
+
+# Utilisateur applicatif PostgreSQL.
+variable "db_username" {
+  type    = string
+  default = "meditrackapp"
 }
