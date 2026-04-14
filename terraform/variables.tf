@@ -28,23 +28,6 @@ variable "public_subnet_cidr" {
   default = "10.0.1.0/24"
 }
 
-# Second sous-reseau public pour l'ALB.
-variable "public_subnet_b_cidr" {
-  type    = string
-  default = "10.0.2.0/24"
-}
-
-# Sous-reseaux prives pour ECS et RDS.
-variable "private_subnet_a_cidr" {
-  type    = string
-  default = "10.0.10.0/24"
-}
-
-variable "private_subnet_b_cidr" {
-  type    = string
-  default = "10.0.11.0/24"
-}
-
 # Type d'instance EC2.
 variable "instance_type" {
   type    = string
@@ -69,13 +52,30 @@ variable "allowed_ssh_cidr" {
   default = "235.235.235.235/32"
 }
 
+# Second sous-reseau public pour l'ALB.
+variable "public_subnet_b_cidr" {
+  type    = string
+  default = "10.0.2.0/24"
+}
+
+# Sous-reseaux prives pour ECS et RDS.
+variable "private_subnet_a_cidr" {
+  type    = string
+  default = "10.0.10.0/24"
+}
+
+variable "private_subnet_b_cidr" {
+  type    = string
+  default = "10.0.11.0/24"
+}
+
+
 # Tag de l'image Docker poussee vers ECR.
 variable "api_image_tag" {
   type    = string
-  default = "v1"
 }
 
-# URL du depot ECR prive cree manuellement via AWS CLI ou console.
+# URL du depot ECR cree manuellement via AWS CLI.
 variable "ecr_repository_url" {
   type = string
 }

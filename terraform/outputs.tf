@@ -29,11 +29,6 @@ output "cloudfront_domain_name" {
   value = aws_cloudfront_distribution.site.domain_name
 }
 
-# URL du depot ECR de l'API.
-output "ecr_repository_url" {
-  value = var.ecr_repository_url
-}
-
 # Endpoint RDS prive.
 output "rds_endpoint" {
   value = aws_db_instance.api.address
