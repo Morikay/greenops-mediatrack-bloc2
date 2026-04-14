@@ -19,3 +19,4 @@ terraform/*.tfvars
 # Ansible and OS
 *.retry
 .DS_Store
+terraform/tfplan
