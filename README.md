@@ -21,7 +21,8 @@ Le Bloc 2 part du socle Terraform du Bloc 1 et l'etend pour ajouter une platefor
 - de nouveaux sous-reseaux prives sont ajoutes pour ECS et RDS ;
 - un NAT Gateway permet aux taches Fargate en sous-reseau prive de recuperer l'image Docker et d'ecrire les logs ;
 - l'API est construite localement depuis `api-backend/` ;
-- l'image est poussee dans ECR ;
+- le depot ECR est cree manuellement via AWS CLI ;
+- l'image est poussee dans ECR avec Docker ;
 - ECS Fargate consomme cette image et dialogue avec PostgreSQL ;
 - l'ALB fournit le point d'entree HTTP public vers l'API.
 
@@ -53,12 +54,12 @@ Les tests fonctionnels reussis sont :
 - `GET /contacts` -> `200 OK`
 - `POST /contact` -> `201 Created`
 
-Le service ECS est actif, la target ALB est `healthy`, la table `contacts` est bien creee dans PostgreSQL et un `terraform plan` final ne remonte plus aucun changement.
+Le service ECS est actif, la target ALB est `healthy` et la table `contacts` est bien creee dans PostgreSQL.
 
 Le socle Bloc 1 de reference reste deploye avec :
 
 - URL CloudFront : `https://difzkce0aqf6s.cloudfront.net`
-- EC2 DNS public : `ec2-35-180-79-188.eu-west-3.compute.amazonaws.com`
+- EC2 DNS public : `ec2-51-44-86-157.eu-west-3.compute.amazonaws.com`
 - Bucket S3 : `greenops-mediatrack-af18a78a`
 
 ## Arborescence reelle
@@ -98,10 +99,10 @@ Le socle Bloc 1 de reference reste deploye avec :
 ## Fichiers Terraform Bloc 2
 
 - [main.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/main.tf) : socle d'infrastructure du Bloc 1.
-- [api_platform.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/api_platform.tf) : ressources specifiques au Bloc 2, notamment ECR, RDS, ECS, ALB, NAT et sous-reseaux prives.
+- [api_platform.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/api_platform.tf) : ressources specifiques au Bloc 2, notamment RDS, ECS, ALB, NAT et sous-reseaux prives.
 - [variables.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/variables.tf) : variables communes et variables du Bloc 2.
 - [provider.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/provider.tf) : provider AWS, region et profil local.
-- [outputs.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/outputs.tf) : valeurs utiles apres deploiement, comme l'URL ECR, l'endpoint RDS et le DNS de l'ALB.
+- [outputs.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/outputs.tf) : valeurs utiles apres deploiement, comme l'endpoint RDS et le DNS de l'ALB.
 - [version.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/version.tf) : version minimale de Terraform et des providers.
 
 ## Fichiers API
@@ -143,11 +144,16 @@ HOME=/home/llesage terraform validate
 HOME=/home/llesage terraform plan
 ```
 
-### 2. Creer le depot ECR
+### 2. Creer le depot ECR en AWS CLI
 
 ```bash
-cd /home/llesage/greenops-mediatrack-bloc2/terraform
-HOME=/home/llesage terraform apply -target=aws_ecr_repository.api
+HOME=/home/llesage aws ecr create-repository \
+  --repository-name greenops-mediatrack-api \
+  --image-tag-mutability MUTABLE \
+  --image-scanning-configuration scanOnPush=true \
+  --encryption-configuration encryptionType=AES256 \
+  --profile greenops \
+  --region eu-west-3
 ```
 
 ### 3. Construire et pousser l'image Docker
@@ -155,11 +161,11 @@ HOME=/home/llesage terraform apply -target=aws_ecr_repository.api
 Exemple de sequence :
 
 ```bash
-aws ecr get-login-password --profile greenops --region eu-west-3 | docker login --username AWS --password-stdin <ecr_repository_url>
+HOME=/home/llesage aws ecr get-login-password --profile greenops --region eu-west-3 | docker login --username AWS --password-stdin 691317218548.dkr.ecr.eu-west-3.amazonaws.com
 cd /home/llesage/greenops-mediatrack-bloc2/api-backend
-docker build -t meditrack-api:v2 .
-docker tag meditrack-api:v2 <ecr_repository_url>:v2
-docker push <ecr_repository_url>:v2
+docker build -t meditrack-api:v1 .
+docker tag meditrack-api:v1 691317218548.dkr.ecr.eu-west-3.amazonaws.com/greenops-mediatrack-api:v1
+docker push 691317218548.dkr.ecr.eu-west-3.amazonaws.com/greenops-mediatrack-api:v1
 ```
 
 ### 4. Deployer l'infrastructure complete
@@ -201,7 +207,9 @@ curl -X POST http://greenops-mediatrack-alb-850454209.eu-west-3.elb.amazonaws.co
 
 Ce dossier Bloc 2 est separe du Bloc 1 sur le plan du code, mais il reutilise le socle d'infrastructure Terraform issu du Bloc 1. Un `terraform apply` Bloc 2 ajoute donc des ressources autour de ce socle et peut mettre a jour certains elements communs si les variables diffèrent.
 
-Un drift residuel CloudFront existait au depart sur le socle Bloc 1. Il a ete neutralise dans [main.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/main.tf) pour retrouver un `terraform plan` final propre.
+Un drift residuel CloudFront existait au depart sur le socle Bloc 1. Il a ete neutralise dans [main.tf](/home/llesage/greenops-mediatrack-bloc2/terraform/main.tf). Il reste toutefois un ecart recurrent sur la configuration de chiffrement S3 du socle statique, qui n'affecte pas le fonctionnement du Bloc 2.
+
+Le depot ECR n'est plus gere par Terraform dans cette version du projet. Il est cree manuellement via AWS CLI, puis son URL est fournie a Terraform via `terraform.tfvars`.
 
 ## Fichiers sensibles
 
