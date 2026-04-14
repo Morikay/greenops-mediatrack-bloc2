@@ -75,6 +75,11 @@ variable "api_image_tag" {
   default = "v1"
 }
 
+# URL du depot ECR prive cree manuellement via AWS CLI ou console.
+variable "ecr_repository_url" {
+  type = string
+}
+
 # Nombre de taches ECS desirees.
 variable "ecs_desired_count" {
   type    = number

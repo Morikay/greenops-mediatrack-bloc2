@@ -5,7 +5,7 @@
 locals {
   api_container_name = "meditrack-api"
   api_container_port = 3000
-  api_image          = "${aws_ecr_repository.api.repository_url}:${var.api_image_tag}"
+  api_image          = "${var.ecr_repository_url}:${var.api_image_tag}"
 }
 
 # -----------------------------------------------------------------------------
@@ -86,23 +86,6 @@ resource "aws_route_table_association" "private_a" {
 resource "aws_route_table_association" "private_b" {
   subnet_id      = aws_subnet.private_b.id
   route_table_id = aws_route_table.private.id
-}
-
-# -----------------------------------------------------------------------------
-# Depot ECR prive pour l'API
-# -----------------------------------------------------------------------------
-
-resource "aws_ecr_repository" "api" {
-  name                 = "${var.project_name}-api"
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
 }
 
 # -----------------------------------------------------------------------------

@@ -31,7 +31,7 @@ output "cloudfront_domain_name" {
 
 # URL du depot ECR de l'API.
 output "ecr_repository_url" {
-  value = aws_ecr_repository.api.repository_url
+  value = var.ecr_repository_url
 }
 
 # Endpoint RDS prive.
